@@ -225,6 +225,7 @@ CCoinsViewDB *pcoinsdbview = nullptr;
 CCoinsViewCache *pcoinsTip = nullptr;
 CBlockTreeDB *pblocktree = nullptr;
 StorageResults *pstorageresult = nullptr;
+EventDB *peventdb = nullptr;
 
 enum FlushStateMode {
     FLUSH_STATE_NONE,
@@ -1753,6 +1754,7 @@ static DisconnectResult DisconnectBlock(const CBlock& block, const CBlockIndex* 
     if(pfClean == NULL && fLogEvents){
         pstorageresult->deleteResults(block.vtx);
         pblocktree->EraseHeightIndex(pindex->nHeight);
+        peventdb->eraseBlock(pindex->nHeight);
     }
     pblocktree->EraseStakeIndex(pindex->nHeight);
 
@@ -2472,6 +2474,11 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
     uint64_t nValueOut=0;
     uint64_t nValueIn=0;
 
+    //use revert just in case there are uncommitted results from a failed block
+    if(fLogEvents){
+        peventdb->revert();
+    }
+
     for (unsigned int i = 0; i < block.vtx.size(); i++)
     {
         const CTransaction &tx = *(block.vtx[i]);
@@ -2621,9 +2628,14 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
 
                 ContractExecutor executor(block, output, blockGasLimit);
                 ContractExecutionResult result;
-                if(!executor.execute(result, true)){
+                result.blockHash = block.GetHash();
+                if(!executor.execute(result, !fJustCheck)){
                     return state.DoS(100, error("ConnectBlock(): Error processing VM execution results"), REJECT_INVALID, "bad-vm-exec-processing");
                 }
+                if(fLogEvents){
+                    peventdb->addResult(result);
+                }
+                LogPrintf("contract exec:\n %s\n\n", result.toJSON().write(1, 2)); //todo: find better way of logging this
                 blockGasUsed += result.usedGas;
                 if(blockGasUsed > blockGasLimit){
                     return state.DoS(1000, error("ConnectBlock(): Block exceeds gas limit"), REJECT_INVALID, "bad-blk-gaslimit");
@@ -2639,7 +2651,7 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
                         return state.DoS(100, error("can't yet handle non-pubkeyhash refunds"));
                     }
                 }
-                gasRefunds += result.refundSender;
+                gasRefunds += output.gasLimit - result.usedGas;
                 if(result.transferTx.vin.size() > 0) {
                     checkBlock.vtx.push_back(MakeTransactionRef(std::move(result.transferTx)));
                 }
@@ -2894,13 +2906,13 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
             }else if(block.vtx.size() < checkBlock.vtx.size()){
                 LogPrintf("Actual block is missing AAL transactions. Actual txs: %i, expected txs: %i\n", block.vtx.size(), checkBlock.vtx.size());
                 for(size_t i=0;i<checkBlock.vtx.size();i++){
-                    if(i > block.vtx.size()){
+                    if(i >= block.vtx.size()){
                         LogPrintf("Missing transaction: %s\n", checkBlock.vtx[i]->ToString());
                     }else {
                         if (block.vtx[i]->GetHash() != checkBlock.vtx[i]->GetHash()) {
                             LogPrintf("Mismatched transaction at entry %i\n", i);
-                            LogPrintf("Actual: %s\n", block.vtx[i]->ToString());
-                            LogPrintf("Expected: %s\n", checkBlock.vtx[i]->ToString());
+                      //      LogPrintf("Actual: %s\n", block.vtx[i]->ToString());
+                      //      LogPrintf("Expected: %s\n", checkBlock.vtx[i]->ToString());
                         }
                     }
                 }
@@ -2909,8 +2921,8 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
                 for(size_t i=0;i<checkBlock.vtx.size();i++){
                     if (block.vtx[i]->GetHash() != block.vtx[i]->GetHash()) {
                         LogPrintf("Mismatched transaction at entry %i\n", i);
-                        LogPrintf("Actual: %s\n", block.vtx[i]->ToString());
-                        LogPrintf("Expected: %s\n", checkBlock.vtx[i]->ToString());
+              //          LogPrintf("Actual: %s\n", block.vtx[i]->ToString());
+              //          LogPrintf("Expected: %s\n", checkBlock.vtx[i]->ToString());
                     }
                 }
             }
@@ -2975,6 +2987,7 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
             if (!pblocktree->WriteHeightIndex(e.second.first, e.second.second))
                 return AbortNode(state, "Failed to write height index");
         }
+        peventdb->commit(pindex->nHeight);
     }    
     if(block.IsProofOfStake()){
         // Read the public key from the second output

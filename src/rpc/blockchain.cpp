@@ -28,6 +28,7 @@
 #include "libdevcore/CommonData.h"
 #include "pos.h"
 #include "txdb.h"
+#include <x86lib.h>
 
 #include <stdint.h>
 
@@ -257,6 +258,37 @@ UniValue transactionReceiptToJSON(const dev::eth::TransactionReceipt& txRec)
     result.push_back(Pair("log", logEntries));
     return result;
 }
+UniValue getstate(const JSONRPCRequest& request){
+    DeltaDBWrapper wrap(pdeltaDB);
+}
+
+UniValue touniversaladdress(const JSONRPCRequest& request)
+{
+    if (request.fHelp || request.params.size() != 1)
+        throw std::runtime_error(
+            "touniversaladdress base58address\n"
+            "\nConverts the given base58 address to an appropriate universaladdress for contracts as a hex string\n"
+            "\nArguments:\n"
+            "1. base58address      (string, required) The base58 address to convert\n"
+            "\nResult:\n"
+            "\"hex\"         (string) The hex string of the converted universaladdress\n"
+            "\nExamples:\n"
+            + HelpExampleCli("touniversaladdress", "QZWKeCcirs7JpoVgesm3NaG9RnD3CtWaTo")
+            + HelpExampleRpc("touniversaladdress", "QZWKeCcirs7JpoVgesm3NaG9RnD3CtWaTo")
+        );
+
+    CBitcoinAddress btcaddr(request.params[0].get_str());
+    UniversalAddress addr;
+    addr.fromBitcoinAddress(btcaddr);
+    if(addr.version == AddressVersion::UNKNOWN){
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Address version is not supported (are you using a mismatched testnet/mainnet address?)");
+    }
+    UniversalAddressABI raw = addr.toAbi();
+    std::vector<uint8_t> tmp((uint8_t*)&raw, ((uint8_t*)&raw) + sizeof(UniversalAddressABI)); 
+
+    return HexStr(tmp);
+}
+
 ////////////////////////////////////////////////////////////////////////////
 UniValue getblockcount(const JSONRPCRequest& request)
 {
@@ -1024,49 +1056,183 @@ UniValue callcontract(const JSONRPCRequest& request)
  
     LOCK(cs_main);
     
-    std::string strAddr = request.params[0].get_str();
     std::string data = request.params[1].get_str();
 
-    if(data.size() % 2 != 0 || !CheckHex(data))
-        throw JSONRPCError(RPC_TYPE_ERROR, "Invalid data (data not hex)");
+    std::string contractaddress = request.params[0].get_str();
+    UniversalAddress address;
+    if(contractaddress.size() != 40 || !CheckHex(contractaddress)){
+        CBitcoinAddress a(contractaddress);
+        if(!a.IsValid(true)){
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Address provided is not a valid hex string or base58 address");
+        }
+        address.fromBitcoinAddress(a);
+        if(!address.isContract())
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Address provided is not a contract address");
+    }else{
+        //hex assumes EVM
+        address.version = AddressVersion::EVM;
+        address.data = ParseHex(contractaddress);
+    }
 
-    if(strAddr.size() != 40 || !CheckHex(strAddr))
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Incorrect address");
- 
-    dev::Address addrAccount(strAddr);
-    if(!globalState->addressInUse(addrAccount))
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Address does not exist");
+    if(address.version == AddressVersion::EVM){
+        dev::Address addrAccount(contractaddress);
+        if(!globalState->addressInUse(addrAccount))
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Address does not exist");
     
-    dev::Address senderAddress;
-    if(request.params.size() == 3){
-        CBitcoinAddress qtumSenderAddress(request.params[2].get_str());
-        if(qtumSenderAddress.IsValid()){
-            CKeyID keyid;
-            qtumSenderAddress.GetKeyID(keyid);
-            senderAddress = dev::Address(HexStr(valtype(keyid.begin(),keyid.end())));
-        }else{
-            senderAddress = dev::Address(request.params[2].get_str());
+        dev::Address senderAddress;
+        if(request.params.size() == 3){
+            CBitcoinAddress qtumSenderAddress(request.params[2].get_str());
+            if(qtumSenderAddress.IsValid()){
+                CKeyID keyid;
+                qtumSenderAddress.GetKeyID(keyid);
+                senderAddress = dev::Address(HexStr(valtype(keyid.begin(),keyid.end())));
+            }else{
+                senderAddress = dev::Address(request.params[2].get_str());
+            }
+
+        }
+        uint64_t gasLimit=0;
+        if(request.params.size() == 4){
+            gasLimit = request.params[3].get_int();
         }
 
+
+        std::vector<ResultExecute> execResults = CallContract(addrAccount, ParseHex(data), senderAddress, gasLimit);
+
+        if(fRecordLogOpcodes){
+            writeVMlog(execResults);
+        }
+
+        UniValue result(UniValue::VOBJ);
+        result.push_back(Pair("address", contractaddress));
+        result.push_back(Pair("executionResult", executionResultToJSON(execResults[0].execRes)));
+        result.push_back(Pair("transactionReceipt", transactionReceiptToJSON(execResults[0].txRec)));
+    
+        return result;
     }
+
+    //other VMs
+    UniversalAddress sender;
+    sender.version = AddressVersion::PUBKEYHASH;
+    if(request.params.size() == 3){
+        CBitcoinAddress sendertmp(request.params[2].get_str());
+        sender.fromBitcoinAddress(sendertmp);
+    }
+    DeltaDBWrapper db(pdeltaDB);
+    std::vector<uint8_t> bytecode;
+    if(!db.readByteCode(address, bytecode)){
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Contract does not exist at that address");
+    }
+    CBlock block;
+    CBlockIndex* pblockindex = mapBlockIndex[pcoinsTip->GetBestBlock()];
+
+    if (!ReadBlockFromDisk(block, pblockindex, Params().GetConsensus()))
+        // Block not found on disk. This could be because we have the block
+        // header in our index but don't have the block (for example if a
+        // non-whitelisted node sends us an unrequested long chain of valid
+        // blocks, we add the headers to our index, but don't accept the
+        // block).
+        throw JSONRPCError(RPC_MISC_ERROR, "Block not found on disk");
+    
+    ContractOutput output;
+
+    output.version = VersionVM::Getx86Default();
+    output.value = 0;
+    output.gasPrice = 1;
+    output.gasLimit = 10000000000;
+    output.address = address;
+    output.data = ParseHex(data);
+    //output.sender = 0; //??
+    output.sender = sender;
+    //output.vout = 0; //?
+    output.OpCreate = false;
+
+    ContractExecutor exec(block, output, 10000000000);
+    ContractExecutionResult result;
+    bool success = exec.execute(result, false);
+    //todo need a result to json for ContractExecutionResult
+
+    return result.toJSON();
+}
+
+////////////////////////////////////////////////////////////////////// // qtum
+
+UniValue encodedata(const JSONRPCRequest& request){
+    if (request.fHelp || request.params.size() < 1)
+        throw std::runtime_error(
+             "encodedata hex-data (hex-data) (hex-data) ...\n"
+             "\nArgument:\n"
+             "1. \"hex-data\"         (string, required) The hex data to encode into an ABI string\n"
+        );
+    std::vector<uint8_t> data;
+    for(int i=0;i<request.params.size(); i++){
+        if(!CheckHex(request.params[i].get_str()) || request.params[i].get_str().size() % 2 != 0){
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid hex data");
+        }
+        auto tmp = ParseHex(request.params[i].get_str());
+        uint32_t len = tmp.size();
+        uint8_t* lentmp = (uint8_t*)&len;
+        data.insert(data.end(), &lentmp[0], &lentmp[sizeof(uint32_t) - 1]);
+        data.insert(data.end(), tmp.begin(), tmp.end());
+    }
+    data = x86Lib::qtumCompressPayload(data);
+    return UniValue(HexStr(data));
+}
+
+
+UniValue executecontract(const JSONRPCRequest& request)
+{
+    if (request.fHelp || request.params.size() < 1)
+        throw std::runtime_error(
+             "executecontract \"bytecode\" ( address ) ( gasLimit )\n"
+             "\nArgument:\n"
+             "1. \"bytecode\"         (string, required) The contract bytecode hex string\n"
+             "2. address              (string, optional) The sender address hex string\n"
+             "3. gasLimit             (string, optional) The gas limit for executing the contract\n"
+         );
+ 
+    LOCK(cs_main);
+    
+    std::string bytecodeStr = request.params[0].get_str();
+
     uint64_t gasLimit=0;
-    if(request.params.size() == 4){
+    if(request.params.size() == 3){
         gasLimit = request.params[3].get_int();
     }
 
+    //other VMs
+    DeltaDBWrapper db(pdeltaDB);
+    std::vector<uint8_t> bytecode = ParseHex(bytecodeStr);
 
-    std::vector<ResultExecute> execResults = CallContract(addrAccount, ParseHex(data), senderAddress, gasLimit);
+    CBlock block;
+    CBlockIndex* pblockindex = mapBlockIndex[pcoinsTip->GetBestBlock()];
 
-    if(fRecordLogOpcodes){
-        writeVMlog(execResults);
-    }
+    if (!ReadBlockFromDisk(block, pblockindex, Params().GetConsensus()))
+        // Block not found on disk. This could be because we have the block
+        // header in our index but don't have the block (for example if a
+        // non-whitelisted node sends us an unrequested long chain of valid
+        // blocks, we add the headers to our index, but don't accept the
+        // block).
+        throw JSONRPCError(RPC_MISC_ERROR, "Block not found on disk");
+    
+    ContractOutput output;
 
-    UniValue result(UniValue::VOBJ);
-    result.push_back(Pair("address", strAddr));
-    result.push_back(Pair("executionResult", executionResultToJSON(execResults[0].execRes)));
-    result.push_back(Pair("transactionReceipt", transactionReceiptToJSON(execResults[0].txRec)));
- 
-    return result;
+    output.version = VersionVM::Getx86Default();
+    output.value = 0;
+    output.gasPrice = 1;
+    output.gasLimit = 10000000000;
+    //output.address = add;
+    output.data = bytecode;
+    //output.sender = 0; //??
+    output.sender.version = AddressVersion::PUBKEYHASH;
+    //output.vout = 0; //?
+    output.OpCreate = true;
+
+    ContractExecutor exec(block, output, 10000000000);
+    ContractExecutionResult result;
+    bool success = exec.execute(result, false);
+
+    return result.toJSON();
 }
 
 void assignJSON(UniValue& entry, const TransactionReceiptInfo& resExec) {
@@ -1450,6 +1616,44 @@ private:
     }
 
 };
+
+UniValue searchevents(const JSONRPCRequest& request)
+{
+    if (request.fHelp)
+        throw std::runtime_error(
+             "searchevents \"address\" [fromblock] [toblock] [maxcount]\n" 
+             "\nArgument:\n"
+             "1. \"address\"          (string, optional) An address or a list of addresses to only get logs from particular account(s)\n"
+             "2. \"fromBlock\"        (numeric, optional) The number of the earliest block (latest may be given to mean the most recent block) (default: 1)\n"
+             "3. \"toBlock\"          (string, optional) The number of the latest block (-1 may be given to mean the most recent block) (default: -1)\n"
+             "4. \"maxCount\"         (numeric, optional) The maximum number of execution results (default: 10)\n"
+
+         );
+    //eventually, have this go in descending order, so that the most recent events are the first result
+    LOCK(cs_main);
+    /*
+    std::string data = request.params[1].get_str();
+
+    std::string contractaddress = request.params[0].get_str();
+    UniversalAddress address;
+    CBitcoinAddress a(contractaddress);
+    if(!a.IsValid(true)){
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Address provided is not a valid hex string or base58 address");
+    }
+    address.fromBitcoinAddress(a);
+    if(!address.isContract())
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Address provided is not a contract address");
+    */
+    auto list = peventdb->getResults(UniversalAddress(), 1, chainActive.Height(), 10);
+    UniValue result(UniValue::VARR);
+    for(auto& s : list){
+        UniValue item(UniValue::VOBJ);
+        item.read(s);
+        result.push_back(item);
+    }
+    return result;
+}
+
 
 UniValue searchlogs(const JSONRPCRequest& request)
 {
@@ -2401,6 +2605,9 @@ static const CRPCCommand commands[] =
     { "blockchain",         "preciousblock",          &preciousblock,          true,  {"blockhash"} },
 
     { "blockchain",         "callcontract",           &callcontract,           true,  {"address","data"} },
+    { "blockchain",         "executecontract",        &executecontract,        true,  {"address","bytecode"} },
+    { "blockchain",         "encodedata",             &encodedata,             true,  {"hex-data"}},
+    { "blockchain",         "touniversaladdress",     &touniversaladdress,     true,  {"base58address"} },
     /* Not shown in help */
     { "hidden",             "invalidateblock",        &invalidateblock,        true,  {"blockhash"} },
     { "hidden",             "reconsiderblock",        &reconsiderblock,        true,  {"blockhash"} },
@@ -2410,6 +2617,7 @@ static const CRPCCommand commands[] =
     { "blockchain",         "listcontracts",          &listcontracts,          true,  {"start", "maxDisplay"} },
     { "blockchain",         "gettransactionreceipt",  &gettransactionreceipt,  true,  {"hash"} },
     { "blockchain",         "searchlogs",             &searchlogs,             true,  {"fromBlock", "toBlock", "address", "topics"} },
+    { "blockchain",         "searchevents",           &searchevents,           true,  {"address", "fromBlock", "toBlock", "maxCount"} },
 
     { "blockchain",         "waitforlogs",            &waitforlogs,            true,  {"fromBlock", "nblocks", "address", "topics"} },
 };

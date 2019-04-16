@@ -88,6 +88,16 @@ public:
     std::string ToString() const;
     int CompareTo(const CBase58Data& b58) const;
 
+    std::vector<unsigned char> getVersion(){
+        std::vector<unsigned char> copy(vchVersion.begin(), vchVersion.end());
+        return copy;
+    }
+
+    std::vector<unsigned char> getData(){
+        std::vector<unsigned char> copy(vchData.begin(), vchData.end());
+        return copy;
+    }
+
     bool operator==(const CBase58Data& b58) const { return CompareTo(b58) == 0; }
     bool operator<=(const CBase58Data& b58) const { return CompareTo(b58) <= 0; }
     bool operator>=(const CBase58Data& b58) const { return CompareTo(b58) >= 0; }
@@ -106,13 +116,16 @@ public:
     bool Set(const CKeyID &id);
     bool Set(const CScriptID &id);
     bool Set(const CTxDestination &dest);
-    bool IsValid() const;
-    bool IsValid(const CChainParams &params) const;
+    bool IsValid(bool allowContract = false) const;
+    bool IsValid(const CChainParams &params, bool allowContract = false) const;
 
     CBitcoinAddress() {}
     CBitcoinAddress(const CTxDestination &dest) { Set(dest); }
     CBitcoinAddress(const std::string& strAddress) { SetString(strAddress); }
     CBitcoinAddress(const char* pszAddress) { SetString(pszAddress); }
+    CBitcoinAddress(const std::vector<unsigned char> &vchVersionIn, const void* pdata, size_t nSize){
+        SetData(vchVersionIn, pdata, nSize);
+    }
 
     CTxDestination Get() const;
     bool GetKeyID(CKeyID &keyID) const;
