@@ -7,25 +7,28 @@
 
 using namespace x86Lib;
 
-ExecDataABI fakeExecData(){
+
+
+ExecDataABI fakeExecData(UniversalAddress self, UniversalAddress sender = UniversalAddress(), UniversalAddress origin =  UniversalAddress()){
     ExecDataABI e;
     e.size = sizeof(e);
     e.isCreate = 0;
-    e.sender = UniversalAddressABI();
+    e.sender = sender.toAbi();
     e.gasLimit = 10000000;
     e.valueSent = 0;
-    e.origin = UniversalAddressABI();
+    e.origin = origin.toAbi();
+    e.self = self.toAbi();
     e.nestLevel = 0;
     return e;
 }
 
-ContractEnvironment fakeContractEnv(){
+ContractEnvironment fakeContractEnv(UniversalAddress blockCreator = UniversalAddress()){
     ContractEnvironment env;
     env.blockNumber = 1;
     env.blockTime = 1;
     env.difficulty = 1;
     env.gasLimit = 10000000;
-    env.blockCreator = UniversalAddress();
+    env.blockCreator = blockCreator;
     env.blockHashes = std::vector<uint256>(); //ok to leave empty for now
     return env;
 }
@@ -46,8 +49,9 @@ void destroyFakeCPU(x86CPU &cpu){
 
 
 BOOST_FIXTURE_TEST_SUITE(x86_tests, TestingSetup)
-
+const uint32_t addressGen = 0x19fa12de;
 struct FakeVMContainer{
+    UniversalAddress address;
     DeltaDBWrapper wrapper;
     x86ContractVM vm;
     ExecDataABI execdata;
@@ -55,14 +59,15 @@ struct FakeVMContainer{
     RAMemory mem;
     x86CPU cpu;
     FakeVMContainer() : 
+        address(X86, (uint8_t*)&addressGen, ((uint8_t*)&addressGen) + sizeof(addressGen)),
         wrapper(nullptr),
         vm(wrapper, fakeContractEnv(), 1000000),
-        execdata(fakeExecData()),
+        execdata(fakeExecData(address)),
         hv(vm, wrapper, execdata),
         mem(1000, "testmem"),
         cpu(fakeCPU(mem))
     {
-
+        
     }
 
 };
@@ -103,6 +108,35 @@ BOOST_AUTO_TEST_CASE(x86_hypervisor_SCCS){
         uint32_t val = 0;
         fake.cpu.ReadMemory(0x1100, sizeof(uint32_t), &val);
         BOOST_CHECK(val == 0x87654321);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(x86_hypervisor_storage){
+    FakeVMContainer fake;
+    std::vector<uint8_t> key1;
+    key1.push_back(0x82);
+    std::vector<uint8_t> val1;
+    val1.push_back(0x12);
+    val1.push_back(0x34);
+    fake.wrapper.writeState(fake.address, key1, val1);
+
+    fake.cpu.WriteMemory(0x1000, 1, key1.data());
+
+    fake.cpu.SetReg32(EAX, QSC_ReadStorage);
+    fake.cpu.SetReg32(EBX, 0x1000); //key pointer
+    fake.cpu.SetReg32(ECX, 1); //key size
+    fake.cpu.SetReg32(EDX, 0x1100); //value pointer to be written to
+    fake.cpu.SetReg32(ESI, 100); //max value size
+    fake.hv.HandleInt(QtumSystem, fake.cpu);
+
+    BOOST_CHECK(fake.cpu.Reg32(EAX) == 2);
+    {
+        uint8_t t[4];
+        fake.cpu.ReadMemory(0x1100, 4, t);
+        BOOST_CHECK(t[0] == 0x12);
+        BOOST_CHECK(t[1] == 0x34);
+        BOOST_CHECK(t[2] == 0);
+        BOOST_CHECK(t[3] == 0);
     }
 
 }
