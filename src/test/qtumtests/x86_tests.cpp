@@ -47,48 +47,61 @@ void destroyFakeCPU(x86CPU &cpu){
 
 BOOST_FIXTURE_TEST_SUITE(x86_tests, TestingSetup)
 
+struct FakeVMContainer{
+    DeltaDBWrapper wrapper;
+    x86ContractVM vm;
+    ExecDataABI execdata;
+    QtumHypervisor hv;
+    RAMemory mem;
+    x86CPU cpu;
+    FakeVMContainer() : 
+        wrapper(nullptr),
+        vm(wrapper, fakeContractEnv(), 1000000),
+        execdata(fakeExecData()),
+        hv(vm, wrapper, execdata),
+        mem(1000, "testmem"),
+        cpu(fakeCPU(mem))
+    {
+
+    }
+
+};
 
 BOOST_AUTO_TEST_CASE(x86_hypervisor_SCCS){
     //in theory it's ok to not have a backing database for the wrapper
     //as long as we don't access a non-existent key or try to commit to database
-    DeltaDBWrapper wrapper(nullptr);
-    x86ContractVM vm(wrapper, fakeContractEnv(), 1000000);
-    //QtumHypervisor(x86ContractVM &vm, DeltaDBWrapper& db_, const ExecDataABI& execdata)
-    ExecDataABI execdata = fakeExecData();
-    QtumHypervisor hv(vm, wrapper, execdata);
-    RAMemory mem(1000, "testmem");
-    x86CPU cpu = fakeCPU(mem);
+    FakeVMContainer fake;
 
     uint32_t testValue = 0x12345678;
-    cpu.WriteMemory(0x1000, sizeof(testValue), &testValue);
+    fake.cpu.WriteMemory(0x1000, sizeof(testValue), &testValue);
     
-    cpu.SetReg32(EAX, QSC_SCCSPush); //syscall number
-    cpu.SetReg32(EBX, 0x1000); //buffer location
-    cpu.SetReg32(ECX, sizeof(testValue)); //buffer size
+    fake.cpu.SetReg32(EAX, QSC_SCCSPush); //syscall number
+    fake.cpu.SetReg32(EBX, 0x1000); //buffer location
+    fake.cpu.SetReg32(ECX, sizeof(testValue)); //buffer size
 
-    hv.HandleInt(QtumSystem, cpu);
+    fake.hv.HandleInt(QtumSystem, fake.cpu);
 
-    BOOST_CHECK(cpu.Reg32(EAX) == 0); //should return success
-    BOOST_CHECK(hv.sizeofSCCS() == 1); //one item on stack
-    BOOST_CHECK(*((uint32_t*)hv.popSCCS().data()) == 0x12345678);
-    BOOST_CHECK(hv.sizeofSCCS() == 0); //zero items on stack after popping
+    BOOST_CHECK(fake.cpu.Reg32(EAX) == 0); //should return success
+    BOOST_CHECK(fake.hv.sizeofSCCS() == 1); //one item on stack
+    BOOST_CHECK(*((uint32_t*)fake.hv.popSCCS().data()) == 0x12345678);
+    BOOST_CHECK(fake.hv.sizeofSCCS() == 0); //zero items on stack after popping
 
     //push another item on the stack to test poppping
     {
         uint32_t temp = 0x87654321;
         std::vector<uint8_t> t((uint8_t*)&temp, ((uint8_t*)&temp) + sizeof(uint32_t));
-        hv.pushSCCS(t);
+        fake.hv.pushSCCS(t);
     }
-    cpu.SetReg32(EAX, QSC_SCCSPop); //syscall number
-    cpu.SetReg32(EBX, 0x1100); //buffer location
-    cpu.SetReg32(ECX, sizeof(uint32_t)); //buffer size 
-    hv.HandleInt(QtumSystem, cpu);
+    fake.cpu.SetReg32(EAX, QSC_SCCSPop); //syscall number
+    fake.cpu.SetReg32(EBX, 0x1100); //buffer location
+    fake.cpu.SetReg32(ECX, sizeof(uint32_t)); //buffer size 
+    fake.hv.HandleInt(QtumSystem, fake.cpu);
 
-    BOOST_CHECK(cpu.Reg32(EAX) == sizeof(uint32_t));
-    BOOST_CHECK(hv.sizeofSCCS() == 0);
+    BOOST_CHECK(fake.cpu.Reg32(EAX) == sizeof(uint32_t));
+    BOOST_CHECK(fake.hv.sizeofSCCS() == 0);
     {
         uint32_t val = 0;
-        cpu.ReadMemory(0x1100, sizeof(uint32_t), &val);
+        fake.cpu.ReadMemory(0x1100, sizeof(uint32_t), &val);
         BOOST_CHECK(val == 0x87654321);
     }
 
