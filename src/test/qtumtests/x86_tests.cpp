@@ -48,7 +48,7 @@ void destroyFakeCPU(x86CPU &cpu){
 BOOST_FIXTURE_TEST_SUITE(x86_tests, TestingSetup)
 
 
-BOOST_AUTO_TEST_CASE(x86_hypervisor_sccs){
+BOOST_AUTO_TEST_CASE(x86_hypervisor_SCCS){
     //in theory it's ok to not have a backing database for the wrapper
     //as long as we don't access a non-existent key or try to commit to database
     DeltaDBWrapper wrapper(nullptr);
@@ -60,8 +60,7 @@ BOOST_AUTO_TEST_CASE(x86_hypervisor_sccs){
     x86CPU cpu = fakeCPU(mem);
 
     uint32_t testValue = 0x12345678;
-    //note "address" for this write is relative to the memory space we're writing into, NOT where it's located in the overall memory map of the CPU
-    mem.Write(0, sizeof(testValue), &testValue);
+    cpu.WriteMemory(0x1000, sizeof(testValue), &testValue);
     
     cpu.SetReg32(EAX, QSC_SCCSPush); //syscall number
     cpu.SetReg32(EBX, 0x1000); //buffer location
@@ -71,7 +70,28 @@ BOOST_AUTO_TEST_CASE(x86_hypervisor_sccs){
 
     BOOST_CHECK(cpu.Reg32(EAX) == 0); //should return success
     BOOST_CHECK(hv.sizeofSCCS() == 1); //one item on stack
-    BOOST_CHECK(hv.popSCCS()[0] == 0x78); //and top byte should be 78
+    BOOST_CHECK(*((uint32_t*)hv.popSCCS().data()) == 0x12345678);
+    BOOST_CHECK(hv.sizeofSCCS() == 0); //zero items on stack after popping
+
+    //push another item on the stack to test poppping
+    {
+        uint32_t temp = 0x87654321;
+        std::vector<uint8_t> t((uint8_t*)&temp, ((uint8_t*)&temp) + sizeof(uint32_t));
+        hv.pushSCCS(t);
+    }
+    cpu.SetReg32(EAX, QSC_SCCSPop); //syscall number
+    cpu.SetReg32(EBX, 0x1100); //buffer location
+    cpu.SetReg32(ECX, sizeof(uint32_t)); //buffer size 
+    hv.HandleInt(QtumSystem, cpu);
+
+    BOOST_CHECK(cpu.Reg32(EAX) == sizeof(uint32_t));
+    BOOST_CHECK(hv.sizeofSCCS() == 0);
+    {
+        uint32_t val = 0;
+        cpu.ReadMemory(0x1100, sizeof(uint32_t), &val);
+        BOOST_CHECK(val == 0x87654321);
+    }
+
 }
 
 BOOST_AUTO_TEST_SUITE_END()
