@@ -87,6 +87,7 @@ class x86VMData{
 };
 
 class QtumHypervisor : public x86Lib::InterruptHypervisor{
+    public:
     QtumHypervisor(x86ContractVM &vm, DeltaDBWrapper& db_, const ExecDataABI& execdata) : contractVM(vm), execData(execdata), db(db_){
         if(qsc_syscalls.size() == 0){
             setupSyscalls();
