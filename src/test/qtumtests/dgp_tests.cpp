@@ -355,6 +355,8 @@ void checkValue(T value, T value1, T value2, T value3, T value4, size_t i, std::
         BOOST_CHECK(func(value, value1));
 }
 
+/* -- TODO these use EVM and so are disabled for now
+
 BOOST_FIXTURE_TEST_SUITE(dgp_tests, TestChain100Setup)
 
 BOOST_AUTO_TEST_CASE(gas_schedule_default_state_test1){
@@ -581,5 +583,8 @@ BOOST_AUTO_TEST_CASE(min_gas_price_passage_from_130_to_0_three_paramsInstance_te
 }
 
 BOOST_AUTO_TEST_SUITE_END()
+*/
 
 }
+
+
