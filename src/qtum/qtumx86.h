@@ -36,6 +36,8 @@ class QtumHypervisor;
 
 typedef uint32_t (QtumHypervisor::*SyscallFunction)(uint32_t, x86Lib::x86CPU&);
 
+
+// Note: These are placeholders for future capabilities, do not take meaning in numbers just yet.
 //ability to read state
 #define QSCCAP_READSTATE 1
 //ability to write state
@@ -80,7 +82,7 @@ class x86VMData{
     //todo, block/tx can be shared and not require more memory
     x86Lib::ROMemory block;
     x86Lib::ROMemory tx;
-    x86Lib::ROMemory exec;
+    x86Lib::ROMemory exec; //todo: get rid of this, not used
     public:
     x86VMData(){}
     friend QtumHypervisor;
@@ -161,6 +163,7 @@ private:
     uint32_t ReadExternalStorage(uint32_t syscall, x86Lib::x86CPU& vm);
 
     uint32_t SenderAddress(uint32_t syscall, x86Lib::x86CPU& vm);
+    uint32_t SHA256(uint32_t syscall, x86Lib::x86CPU&);
 
     //SCCS
     uint32_t SCCSItemCount(uint32_t syscall, x86Lib::x86CPU& vm);
@@ -180,7 +183,6 @@ private:
     uint32_t UpdateBytecode(uint32_t syscall, x86Lib::x86CPU& vm);
     
     uint32_t SelfCalled(uint32_t syscall, x86Lib::x86CPU& vm);
-
 };
 
 

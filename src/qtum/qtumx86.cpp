@@ -634,6 +634,9 @@ void QtumHypervisor::setupSyscalls(){
     INSTALL_QSC(SCCSDiscard, 0);
     INSTALL_QSC(SCCSClear, 0);
 
+    // todo: might need to put the cap in one of the define pragmas in the header
+    INSTALL_QSC_COST(qtumSHA256, 128, 1);
+
     INSTALL_QSC_COST(CallContract, QSCCAP_CALL, 10000);
 
     INSTALL_QSC_COST(ParseAddress, 0, 10);

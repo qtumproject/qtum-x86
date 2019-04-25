@@ -90,6 +90,9 @@ typedef struct qtum_hash32 { uint8_t data[32]; } __attribute__((__packed__)) qtu
 #define QSC_CallContract            0x4000
 #define QSC_CallLibrary             0x4001
 
+    //cryptographic command, 0x5000
+#define QSC_SHA256                  0x5000
+
 
 //error code types
 //These will cause appropriate revert of state etc
