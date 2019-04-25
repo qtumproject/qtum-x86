@@ -202,6 +202,7 @@ void checkTx(CTransaction& tx, size_t sizeVin, size_t sizeVout, std::vector<CAmo
         BOOST_CHECK(tx.vout[i].nValue == values[i]);
     }
 }
+/* -- TODO these use EVM and so are for now disabled
 
 BOOST_FIXTURE_TEST_SUITE(condensingtransaction_tests, TestingSetup)
 
@@ -343,3 +344,5 @@ BOOST_AUTO_TEST_CASE(condensingtransactionpaytopubkeyhash_tests){
 }
 
 BOOST_AUTO_TEST_SUITE_END()
+
+*/

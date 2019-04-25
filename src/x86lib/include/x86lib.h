@@ -269,6 +269,9 @@ class RAMemory : public MemoryDevice{
     virtual char* GetMemory(){
         return ptr;
     }
+	uint32_t getSize(){
+		return size;
+	}
 };
 
 class ROMemory : public RAMemory{

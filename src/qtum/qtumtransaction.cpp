@@ -370,6 +370,9 @@ bool DeltaDBWrapper::Read(valtype K, valtype& V){
             return true;
         }
     }
+    if(db == nullptr){
+        return false;
+    }
     return db->Read(K, V);
 }
 bool DeltaDBWrapper::Write(valtype K, uint64_t V){
@@ -379,7 +382,11 @@ bool DeltaDBWrapper::Write(valtype K, uint64_t V){
 }
 bool DeltaDBWrapper::Read(valtype K, uint64_t& V){
     std::vector<uint8_t> v(sizeof(uint64_t));
-    int status = db->Read(K, v);
+
+    if(db == nullptr){
+        return false;
+    }
+    int status = db->Read(K, v); //bug?
     if(status){
         memcpy((void*)&V, v.data(), sizeof(uint64_t));
     }
@@ -387,6 +394,10 @@ bool DeltaDBWrapper::Read(valtype K, uint64_t& V){
 }
 
 void DeltaDBWrapper::commit() {
+    if(db == nullptr){
+        //only possible in unit tests
+        throw new std::exception();
+    }
     CDBBatch b(*db);
     condenseAllCheckpoints(); //make sure we only have one checkpoint to deal with
     for(auto kv : current->deltas){
@@ -396,6 +407,7 @@ void DeltaDBWrapper::commit() {
             b.Write(kv.first, kv.second);
         }
     }
+
     db->WriteBatch(b, true); //need fSync?
 
     //clear data stored and reinit
