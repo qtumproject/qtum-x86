@@ -1,7 +1,8 @@
-#include <util.h>
-#include <tinyformat.h>
-#include <algorithm>
 #include "qtumx86.h"
+#include "crypto/sha256.h"
+#include <algorithm>
+#include <tinyformat.h>
+#include <util.h>
 
 #include <x86lib.h>
 #include <validation.h>
@@ -369,6 +370,16 @@ uint32_t QtumHypervisor::ReadExternalStorage(uint32_t syscall, x86Lib::x86CPU& v
     vm.addGasUsed(500 + ((key.size() + value.size()) * 1));
     delete []k;
     return status;
+}
+
+uint32_t QtumHypervisor::SHA256(uint32_t syscall, x86Lib::x86CPU& vm) {
+    unsigned char* k = new unsigned char[vm.Reg32(ECX)];
+    unsigned uint j;
+    unsigned char hash[32];
+    vm.ReadMemory(vm.Reg32(EBX), vm.Reg32(ECX), k);
+    vm.ReadMemory(vm.Reg32(ECX), sizeof(vm.Reg32(ECX)), j);
+    CSHA256().Write(k, j).Finalize(hash); // create hash
+    vm.WriteMemory(vm.Reg32(EDX), sizeof(hash), hash);
 }
 
 uint32_t QtumHypervisor::UpdateBytecode(uint32_t syscall, x86Lib::x86CPU& vm){
