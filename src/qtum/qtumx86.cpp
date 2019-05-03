@@ -373,13 +373,20 @@ uint32_t QtumHypervisor::ReadExternalStorage(uint32_t syscall, x86Lib::x86CPU& v
 }
 
 uint32_t QtumHypervisor::SHA256(uint32_t syscall, x86Lib::x86CPU& vm) {
+    //eax = success
+    //ebx = original value
+    //ecx = sizeof original value
+    //edx = hash of original value
     unsigned char* k = new unsigned char[vm.Reg32(ECX)];
-    unsigned uint j;
-    unsigned char hash[32];
+    unsigned char hash[CSHA256::OUTPUT_SIZE] = {};
     vm.ReadMemory(vm.Reg32(EBX), vm.Reg32(ECX), k);
-    vm.ReadMemory(vm.Reg32(ECX), sizeof(vm.Reg32(ECX)), j);
-    CSHA256().Write(k, j).Finalize(hash); // create hash
-    vm.WriteMemory(vm.Reg32(EDX), sizeof(hash), hash);
+    size_t numBytes = sizeof(k);
+    std::string valHolder(reinterpret_cast<char const*>(k)); //couldn't figure out how to get the hash to work another way, not sure if hinders performance
+    CSHA256().Reset().Write((const unsigned char*)valHolder.data(), valHolder.size()).Finalize(hash); // create hash
+    vm.WriteMemory(vm.Reg32(EDX), 256, hash);
+    vm.addGasUsed(numBytes);
+    delete []k;
+    return 0;
 }
 
 uint32_t QtumHypervisor::UpdateBytecode(uint32_t syscall, x86Lib::x86CPU& vm){
@@ -646,7 +653,7 @@ void QtumHypervisor::setupSyscalls(){
     INSTALL_QSC(SCCSClear, 0);
 
     // todo: might need to put the cap in one of the define pragmas in the header
-    INSTALL_QSC_COST(qtumSHA256, 128, 1);
+    INSTALL_QSC_COST(SHA256, 128, 1);
 
     INSTALL_QSC_COST(CallContract, QSCCAP_CALL, 10000);
 

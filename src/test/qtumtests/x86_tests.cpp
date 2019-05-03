@@ -146,20 +146,24 @@ BOOST_AUTO_TEST_CASE(x86_hypervisor_sha256) {
     //as long as we don't access a non-existent key or try to commit to database
     FakeVMContainer fake;
 
-    uint32_t testValue = 0x12345678;
+    unsigned char testValue[] = "hello world";
     fake.cpu.WriteMemory(0x1000, sizeof(testValue), &testValue);
 
     fake.cpu.SetReg32(EAX, QSC_SHA256);      //syscall number
     fake.cpu.SetReg32(EBX, 0x1000);            //input location
     fake.cpu.SetReg32(ECX, sizeof(testValue)); //input size
-    fake.cpu.SetReg32(EDX, 0x1100); // output location
+    fake.cpu.SetReg32(EDX, 0x1200); // output location
 
     fake.hv.HandleInt(QtumSystem, fake.cpu);
-    const unsigned char eHashVal[32] = "62a0b4457b8bcff7283cccb5b0c163357487231a35e13665edc43e5709fc8f96";
-    unsigned char gHashVal[32];
-    fake.cpu.ReadMemory(0x1100, 32, gHashVal);
-    std::basic_string<unsigned char> gotHashVal = gHashVal;
-    std::basic_string<unsigned char> expectedHashVal = eHashVal;
+    std::string expectedHashVal = "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9";
+    unsigned char *gHashVal = new unsigned char[32];
+    fake.cpu.ReadMemory(0x1200, 256, gHashVal);
+    // convert gHashVal to hex string
+    std::stringstream ss;
+    ss << std::hex;
+    for (int i = 0; i < 32; ++i) 
+        ss << std::setw(2) << std::setfill('0') << (int)gHashVal[i];
+    std::string gotHashVal  = ss.str();
     BOOST_CHECK(expectedHashVal == gotHashVal);
 }
 
