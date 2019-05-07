@@ -368,7 +368,7 @@ uint32_t QtumHypervisor::ReadExternalStorage(uint32_t syscall, x86Lib::x86CPU& v
         vm.WriteMemory(vm.Reg32(EDX), status, value.data());
     }
     vm.addGasUsed(500 + ((key.size() + value.size()) * 1));
-    //delete []k;
+    delete []k;
     return status;
 }
 
