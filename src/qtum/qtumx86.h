@@ -52,6 +52,8 @@ typedef uint32_t (QtumHypervisor::*SyscallFunction)(uint32_t, x86Lib::x86CPU&);
 #define QSCCAP_EVENTS 32
 //ability to get basic blockchain info
 #define QSCCAP_BLOCKCHAIN 64
+//ability to sha256 hash info
+#define QSCCAP_SHA256 128
 
 struct QtumSyscall{
     SyscallFunction function;

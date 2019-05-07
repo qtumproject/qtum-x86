@@ -152,19 +152,52 @@ BOOST_AUTO_TEST_CASE(x86_hypervisor_sha256) {
     fake.cpu.SetReg32(EAX, QSC_SHA256);      //syscall number
     fake.cpu.SetReg32(EBX, 0x1000);            //input location
     fake.cpu.SetReg32(ECX, sizeof(testValue)); //input size
-    fake.cpu.SetReg32(EDX, 0x1200); // output location
+    fake.cpu.SetReg32(EDX, 0x1100); // output location
 
     fake.hv.HandleInt(QtumSystem, fake.cpu);
     std::string expectedHashVal = "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9";
     unsigned char *gHashVal = new unsigned char[32];
-    fake.cpu.ReadMemory(0x1200, 256, gHashVal);
+    fake.cpu.ReadMemory(0x1100, 32, gHashVal);
     // convert gHashVal to hex string
-    std::stringstream ss;
-    ss << std::hex;
-    for (int i = 0; i < 32; ++i) 
-        ss << std::setw(2) << std::setfill('0') << (int)gHashVal[i];
-    std::string gotHashVal  = ss.str();
+    std::string gotHashVal  = bytesToHexString(gHashVal, 32);
     BOOST_CHECK(expectedHashVal == gotHashVal);
+    delete []gHashVal;
+
+    // test case 2
+    unsigned char testValue2[] = "cleatus magnetus";
+    fake.cpu.WriteMemory(0x1000, sizeof(testValue2), &testValue2);
+
+    fake.cpu.SetReg32(EAX, QSC_SHA256);        //syscall number
+    fake.cpu.SetReg32(EBX, 0x1000);            //input location
+    fake.cpu.SetReg32(ECX, sizeof(testValue2)); //input size
+    fake.cpu.SetReg32(EDX, 0x1100);            // output location
+
+    fake.hv.HandleInt(QtumSystem, fake.cpu);
+    std::string expectedHashVal2 = "7d8dff9e51f8f6501ba57417eb768efa80e83e2755fcc124378e7e5c191595a5";
+    unsigned char* gHashVal2 = new unsigned char[32];
+    fake.cpu.ReadMemory(0x1100, 32, gHashVal2);
+    // convert gHashVal to hex string
+    std::string gotHashVal2 = bytesToHexString(gHashVal2, 32);
+    BOOST_CHECK(expectedHashVal2 == gotHashVal2);
+    delete[] gHashVal2;
+
+    unsigned char testValue3[] = "s0mething\ts0mething\td4rk51d3!!!";
+    fake.cpu.WriteMemory(0x1000, sizeof(testValue3), &testValue3);
+
+    fake.cpu.SetReg32(EAX, QSC_SHA256);         //syscall number
+    fake.cpu.SetReg32(EBX, 0x1000);             //input location
+    fake.cpu.SetReg32(ECX, sizeof(testValue3)); //input size
+    fake.cpu.SetReg32(EDX, 0x1100);             // output location
+
+    fake.hv.HandleInt(QtumSystem, fake.cpu);
+    std::string expectedHashVal3 = "5573373555e3ce30a71cace9f2797e2204008399b11cb83ef4599684a36b7ebb";
+    unsigned char* gHashVal3 = new unsigned char[32];
+    fake.cpu.ReadMemory(0x1100, 32, gHashVal3);
+    // convert gHashVal to hex string
+    std::string gotHashVal3 = bytesToHexString(gHashVal3, 32);
+    std::cout << gotHashVal3 << std::endl;
+    BOOST_CHECK(expectedHashVal3 == gotHashVal3);
+    delete[] gHashVal3;
 }
 
 BOOST_AUTO_TEST_SUITE_END()
