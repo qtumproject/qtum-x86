@@ -392,19 +392,12 @@ uint32_t QtumHypervisor::SHA256(uint32_t syscall, x86Lib::x86CPU& vm) {
     //edx = hash of original value
     size_t len = vm.Reg32(ECX);
     vm.addGasUsed(len);
-    std::string k;
+    std::vector<uint8_t> k;
+    k.resize(len);
     unsigned char hash[CSHA256::OUTPUT_SIZE] = {};
-    vm.ReadMemory(vm.Reg32(EBX), len, (void*)k.c_str());
-    /*if (strlen((const char*)k) < len-1) { // catches null values in a string
-        printf("sizeof k: %u\n", strlen((const char*)k));
-        printf("len: %u\n", len);
-    }*/
-    //printf("%s\n", k);
-    std::cout << "output: " << k.data() << std::endl;
-    //const unsigned char *placeholder = &*k.begin();
-    //CSHA256().Write(placeholder, k.size()).Finalize(hash); // create hash
-    //vm.WriteMemory(vm.Reg32(EDX), 256, hash);
-    //delete []k;
+    vm.ReadMemory(vm.Reg32(EBX), len, k.data());
+    CSHA256().Write(k.data(), k.size()).Finalize(hash); // create hash
+    vm.WriteMemory(vm.Reg32(EDX), 256, hash);
     return 0;
 }
 
