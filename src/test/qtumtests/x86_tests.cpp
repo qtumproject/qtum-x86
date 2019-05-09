@@ -160,7 +160,6 @@ BOOST_AUTO_TEST_CASE(x86_hypervisor_sha256) {
     fake.cpu.ReadMemory(0x1100, 32, gHashVal);
     // convert gHashVal to hex string
     std::string gotHashVal  = bytesToHexString(gHashVal, 32);
-    std::cout << gotHashVal << std::endl;
     BOOST_CHECK(expectedHashVal == gotHashVal);
 
     // test case 2
@@ -204,7 +203,6 @@ BOOST_AUTO_TEST_CASE(x86_hypervisor_sha256) {
     fake.cpu.ReadMemory(0x1100, 32, gHashVal4);
     // convert gHashVal to hex string
     std::string gotHashVal4 = bytesToHexString(gHashVal4, 32);
-    std::cout << gotHashVal4 << std::endl;
     BOOST_CHECK(expectedHashVal4 == gotHashVal4);
 }
 
