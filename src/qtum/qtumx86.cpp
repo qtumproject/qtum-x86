@@ -1,6 +1,7 @@
 #include "qtumx86.h"
 #include "crypto/sha256.h"
 #include <algorithm>
+#include <string.h>
 #include <tinyformat.h>
 #include <util.h>
 
@@ -372,19 +373,38 @@ uint32_t QtumHypervisor::ReadExternalStorage(uint32_t syscall, x86Lib::x86CPU& v
     return status;
 }
 
+/*
+uint32_t QtumHypervisor::SCCSPush(uint32_t syscall, x86Lib::x86CPU& vm){
+    //EBX = output buffer
+    //ECX = buffer size
+    //EAX = success
+    std::vector<uint8_t> tmp;
+    tmp.resize(vm.Reg32(ECX));
+    vm.ReadMemory(vm.Reg32(EBX), vm.Reg32(ECX), tmp.data(), Syscall);
+    sccs.push(tmp);
+    //todo SCCS item and memory limits
+    return 0;
+}*/
 uint32_t QtumHypervisor::SHA256(uint32_t syscall, x86Lib::x86CPU& vm) {
     //eax = success
     //ebx = original value
     //ecx = sizeof original value
     //edx = hash of original value
     size_t len = vm.Reg32(ECX);
-    unsigned char* k = new unsigned char[len];
-    unsigned char hash[CSHA256::OUTPUT_SIZE] = {};
-    vm.ReadMemory(vm.Reg32(EBX), len, k);
-    CSHA256().Reset().Write(k, len-1).Finalize(hash); // create hash
-    vm.WriteMemory(vm.Reg32(EDX), 256, hash);
     vm.addGasUsed(len);
-    delete []k;
+    std::string k;
+    unsigned char hash[CSHA256::OUTPUT_SIZE] = {};
+    vm.ReadMemory(vm.Reg32(EBX), len, (void*)k.c_str());
+    /*if (strlen((const char*)k) < len-1) { // catches null values in a string
+        printf("sizeof k: %u\n", strlen((const char*)k));
+        printf("len: %u\n", len);
+    }*/
+    //printf("%s\n", k);
+    std::cout << "output: " << k.data() << std::endl;
+    //const unsigned char *placeholder = &*k.begin();
+    //CSHA256().Write(placeholder, k.size()).Finalize(hash); // create hash
+    //vm.WriteMemory(vm.Reg32(EDX), 256, hash);
+    //delete []k;
     return 0;
 }
 
@@ -652,7 +672,7 @@ void QtumHypervisor::setupSyscalls(){
     INSTALL_QSC(SCCSClear, 0);
 
     // todo: might need to put the cap in one of the define pragmas in the header
-    INSTALL_QSC_COST(SHA256, QSCCAP_SHA256, 1);
+    INSTALL_QSC(SHA256, 1);
 
     INSTALL_QSC_COST(CallContract, QSCCAP_CALL, 10000);
 
