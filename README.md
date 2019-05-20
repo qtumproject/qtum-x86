@@ -192,6 +192,9 @@ NOTE: Building with Qt4 is still supported, however, could result in a broken UI
         ./autogen.sh
         ./configure
         make
+    
+    You can also speed up your make build process by adding a number of cores to build in parallel with. For example, 
+    to build with 4 cores run `make -j4`
 
 3.  It is recommended to build and run the unit tests:
 
