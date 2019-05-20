@@ -65,3 +65,12 @@ std::pair<std::vector<ResultExecute>, ByteCodeExecResult> executeBC(std::vector<
     globalState->dbUtxo().commit();
     return std::make_pair(res, bceExecRes);
 }
+
+std::string bytesToHexString(unsigned char* muhBytes, int len)
+{
+    std::stringstream ss;
+    ss << std::hex;
+    for (int i = 0; i < len; ++i)
+        ss << std::setw(2) << std::setfill('0') << (int)muhBytes[i];
+    return ss.str();
+}

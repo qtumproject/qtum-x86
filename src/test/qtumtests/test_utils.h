@@ -17,3 +17,5 @@ QtumTransaction createQtumTransaction(valtype data, dev::u256 value, dev::u256 g
     dev::h256 hashTransaction, dev::Address recipient, int32_t nvout = 0);
 
 std::pair<std::vector<ResultExecute>, ByteCodeExecResult> executeBC(std::vector<QtumTransaction> txs);
+
+std::string bytesToHexString(unsigned char* muhBytes, int len);

@@ -1,7 +1,9 @@
-#include <util.h>
-#include <tinyformat.h>
-#include <algorithm>
 #include "qtumx86.h"
+#include "crypto/sha256.h"
+#include <algorithm>
+#include <string.h>
+#include <tinyformat.h>
+#include <util.h>
 
 #include <x86lib.h>
 #include <validation.h>
@@ -371,6 +373,34 @@ uint32_t QtumHypervisor::ReadExternalStorage(uint32_t syscall, x86Lib::x86CPU& v
     return status;
 }
 
+/*
+uint32_t QtumHypervisor::SCCSPush(uint32_t syscall, x86Lib::x86CPU& vm){
+    //EBX = output buffer
+    //ECX = buffer size
+    //EAX = success
+    std::vector<uint8_t> tmp;
+    tmp.resize(vm.Reg32(ECX));
+    vm.ReadMemory(vm.Reg32(EBX), vm.Reg32(ECX), tmp.data(), Syscall);
+    sccs.push(tmp);
+    //todo SCCS item and memory limits
+    return 0;
+}*/
+uint32_t QtumHypervisor::SHA256(uint32_t syscall, x86Lib::x86CPU& vm) {
+    //eax = success
+    //ebx = original value
+    //ecx = sizeof original value
+    //edx = hash of original value
+    size_t len = vm.Reg32(ECX);
+    vm.addGasUsed(len);
+    std::vector<uint8_t> k;
+    k.resize(len);
+    unsigned char hash[CSHA256::OUTPUT_SIZE] = {};
+    vm.ReadMemory(vm.Reg32(EBX), len, k.data());
+    CSHA256().Write(k.data(), k.size()).Finalize(hash); // create hash
+    vm.WriteMemory(vm.Reg32(EDX), 256, hash);
+    return 0;
+}
+
 uint32_t QtumHypervisor::UpdateBytecode(uint32_t syscall, x86Lib::x86CPU& vm){
     //eax = success
     //ebx = bytecode, ecx = bytecode size
@@ -633,6 +663,9 @@ void QtumHypervisor::setupSyscalls(){
     INSTALL_QSC(SCCSPush, 0);
     INSTALL_QSC(SCCSDiscard, 0);
     INSTALL_QSC(SCCSClear, 0);
+
+    // todo: might need to put the cap in one of the define pragmas in the header
+    INSTALL_QSC(SHA256, 1);
 
     INSTALL_QSC_COST(CallContract, QSCCAP_CALL, 10000);
 
