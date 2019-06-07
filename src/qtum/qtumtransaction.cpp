@@ -377,19 +377,13 @@ bool DeltaDBWrapper::Read(valtype K, valtype& V){
 }
 bool DeltaDBWrapper::Write(valtype K, uint64_t V){
     std::vector<uint8_t> v(sizeof(uint64_t));
-    memcpy(v.data(), (void*) &V, sizeof(uint8_t));
+    memcpy(v.data(), (void*) &V, sizeof(V));
     return Write(K, v);
 }
 bool DeltaDBWrapper::Read(valtype K, uint64_t& V){
     std::vector<uint8_t> v(sizeof(uint64_t));
-
-    if(db == nullptr){
-        return false;
-    }
-    int status = db->Read(K, v); //bug?
-    if(status){
-        memcpy((void*)&V, v.data(), sizeof(uint64_t));
-    }
+    bool status = Read(K, v);
+    memcpy(&V, v.data(), sizeof(V));
     return status;
 }
 
@@ -826,20 +820,24 @@ bool DeltaDBWrapper:: readRawKey(UniversalAddress address, valtype key, valtype 
 /* current iterator of a key: %address%_iterator_%key% */
 bool DeltaDBWrapper:: writeCurrentIterator(UniversalAddress address, valtype key, uint64_t iterator){
 	std::vector<uint8_t> K;
+    char prefix = 'I';
 	K.insert(K.end(), address.version);
 	K.insert(K.end(), address.data.begin(), address.data.end());	
 	K.insert(K.end(), '_');
-	//K.insert(K.end(), iteratorPre, iteratorPre + sizeof(iteratorPre)/sizeof(uint8_t));
+	K.insert(K.end(), &prefix, &prefix + sizeof(prefix));
+	K.insert(K.end(), '_');
 	K.insert(K.end(), key.begin(),key.end());	
 	return Write(K, iterator);
 }
 
 bool DeltaDBWrapper:: readCurrentIterator(UniversalAddress address,		valtype key, uint64_t &iterator){
 	std::vector<uint8_t> K;
+    char prefix = 'I';
 	K.insert(K.end(), address.version);
 	K.insert(K.end(), address.data.begin(), address.data.end());	
 	K.insert(K.end(), '_');
-	//K.insert(K.end(), iteratorPre, iteratorPre + sizeof(iteratorPre)/sizeof(uint8_t));
+	K.insert(K.end(), &prefix, &prefix + sizeof(prefix));
+	K.insert(K.end(), '_');
 	K.insert(K.end(), key.begin(),key.end());	
 	return Read(K, iterator);
 }
