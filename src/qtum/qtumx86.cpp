@@ -100,7 +100,16 @@ bool x86ContractVM::execute(ContractOutput &output, ContractExecutionResult &res
         //load call data into memory space if not create
         pushArguments(qtumhv, output.data);
     }
-    qtumhv.initVM(bytecode, blockdata, txdata);
+    if(!qtumhv.initVM(bytecode, blockdata, txdata)){
+        LogPrintf("Error initializing x86 VM environment\n");
+        result.modifiedData = db.getLatestModifiedState();
+        result.status = ContractStatus::InternalError("Error initializing x86 VM environment for this contract");
+        result.usedGas = output.gasLimit;
+        result.refundSender = output.value;
+        result.events = qtumhv.getEffects().events;
+        result.callResults = qtumhv.getEffects().callResults;
+        return false;
+    }
     qtumhv.cpu.addGasUsed(50000); //base execution cost
     try{
         qtumhv.cpu.Exec(INT32_MAX);
@@ -195,7 +204,11 @@ bool QtumHypervisor::initVM(const std::vector<uint8_t> bytecode, const BlockData
         return false;
     }
     map = parseContractData(bytecode.data(), &code, &data, &options);
-
+    if(bytecode.size() < map->codeSize + map->dataSize + map->optionsSize){
+        LogPrintf("Contract bytecode map indicates more bytes than provided\n");
+        LogPrintf("Improperly formed bytecode\n");
+        return false;
+    }
     MemorySystem memory;
     //note, Init will zero memory allocated
     vmdata.code.Init(MAX_CODE_SIZE, "code");
