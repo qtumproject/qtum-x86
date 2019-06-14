@@ -204,7 +204,12 @@ bool QtumHypervisor::initVM(const std::vector<uint8_t> bytecode, const BlockData
         return false;
     }
     map = parseContractData(bytecode.data(), &code, &data, &options);
-    if(bytecode.size() < map->codeSize + map->dataSize + map->optionsSize){
+    
+    //check each field in case of overflow exploit
+    if(bytecode.size() < map->codeSize + map->dataSize + map->optionsSize || 
+        bytecode.size() < map->codeSize ||
+        bytecode.size() < map->dataSize ||
+        bytecode.size() < map->optionsSize){
         LogPrintf("Contract bytecode map indicates more bytes than provided\n");
         LogPrintf("Improperly formed bytecode\n");
         return false;
