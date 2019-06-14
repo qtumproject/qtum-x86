@@ -33,6 +33,8 @@
 
 #include <univalue.h>
 
+#include <x86lib.h>
+
 static const std::string WALLET_ENDPOINT_BASE = "/wallet/";
 
 CWallet *GetWalletForJSONRPCRequest(const JSONRPCRequest& request)
@@ -651,7 +653,8 @@ UniValue createcontract(const JSONRPCRequest& request){
 
     // Build OP_EXEC script
     //TODO allow x86 and EVM
-    CScript scriptPubKey = CScript() << CScriptNum(VersionVM::Getx86Default().toRaw()) << CScriptNum(nGasLimit) << CScriptNum(nGasPrice) << ParseHex(bytecode) <<OP_CREATE;
+    auto bytecodeCompressed = x86Lib::qtumCompressPayload(ParseHex(bytecode));
+    CScript scriptPubKey = CScript() << CScriptNum(VersionVM::Getx86Default().toRaw()) << CScriptNum(nGasLimit) << CScriptNum(nGasPrice) << bytecodeCompressed <<OP_CREATE;
 
     // Create and send the transaction
     CReserveKey reservekey(pwallet);

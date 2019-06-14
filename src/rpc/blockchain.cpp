@@ -1202,7 +1202,7 @@ UniValue executecontract(const JSONRPCRequest& request)
 
     //other VMs
     DeltaDBWrapper db(pdeltaDB);
-    std::vector<uint8_t> bytecode = ParseHex(bytecodeStr);
+    std::vector<uint8_t> bytecode = x86Lib::qtumCompressPayload(ParseHex(bytecodeStr));
 
     CBlock block;
     CBlockIndex* pblockindex = mapBlockIndex[pcoinsTip->GetBestBlock()];
