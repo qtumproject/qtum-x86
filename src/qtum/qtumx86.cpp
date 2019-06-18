@@ -79,8 +79,16 @@ bool x86ContractVM::execute(ContractOutput &output, ContractExecutionResult &res
         result.status = ContractStatus::CodeError("Contract bytecode is not big enough to be valid");
         return false;
     }
+    // todo: DELETE THIS AFTER DEBUG
+    stringstream ss;
+    ss << std::hex << std::setfill('0');
 
+    for (auto it = bytecode.begin(); it != bytecode.end(); it++) {
+        ss << "\\x" << std::setw(2) << static_cast<unsigned>(*it);
+    }
 
+    LogPrintf("RJs Debug bytecode output in VM execution stage: ", ss.str());
+    // Debug ****************************************************
     BlockDataABI blockdata = getBlockData();
     TxDataABI txdata = getTxData();
 
