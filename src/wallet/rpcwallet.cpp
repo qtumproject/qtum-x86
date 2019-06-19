@@ -656,11 +656,9 @@ UniValue createcontract(const JSONRPCRequest& request){
     auto bytecodeCompressed = x86Lib::qtumCompressPayload(ParseHex(bytecode));
     // todo: delete the below, this is purely for debugging
     std::stringstream ss;
-    ss << std::hex << std::setfill('0');
-
-    for (auto it = bytecodeCompressed.begin(); it != bytecodeCompressed.end(); it++) {
-        ss << "\\x" << std::setw(2) << static_cast<unsigned>(*it);
-    }
+    ss << std::hex;
+    for (int i = 0; i < len; ++i)
+        ss << std::setw(2) << std::setfill('0') << (int)muhBytes[i];
     LogPrintf("RJs Debug mission yields this bytecode compressed variable: %s\n", ss.str());
     // end delete *********************************************************
 

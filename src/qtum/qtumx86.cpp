@@ -81,11 +81,9 @@ bool x86ContractVM::execute(ContractOutput &output, ContractExecutionResult &res
     }
     // todo: DELETE THIS AFTER DEBUG
     std::stringstream ss;
-    ss << std::hex << std::setfill('0');
-
-    for (auto it = bytecode.begin(); it != bytecode.end(); it++) {
-        ss << "\\x" << std::setw(2) << static_cast<unsigned>(*it);
-    }
+    ss << std::hex;
+    for (int i = 0; i < len; ++i)
+        ss << std::setw(2) << std::setfill('0') << (int)muhBytes[i];
 
     LogPrintf("RJs Debug bytecode output in VM execution stage: %s\n", ss.str());
     // Debug ****************************************************
