@@ -655,7 +655,7 @@ UniValue createcontract(const JSONRPCRequest& request){
     //TODO allow x86 and EVM
     auto bytecodeCompressed = x86Lib::qtumCompressPayload(ParseHex(bytecode));
     // todo: delete the below, this is purely for debugging
-    stringstream ss;
+    std::stringstream ss;
     ss << std::hex << std::setfill('0');
 
     for (auto it = bytecodeCompressed.begin(); it != bytecodeCompressed.end(); it++) {
@@ -663,7 +663,7 @@ UniValue createcontract(const JSONRPCRequest& request){
     }
     LogPrintf("RJs Debug mission yields this bytecode compressed variable: ", ss.str());
     // end delete *********************************************************
-    
+
     CScript scriptPubKey = CScript() << CScriptNum(VersionVM::Getx86Default().toRaw()) << CScriptNum(nGasLimit) << CScriptNum(nGasPrice) << bytecodeCompressed <<OP_CREATE;
 
     // Create and send the transaction

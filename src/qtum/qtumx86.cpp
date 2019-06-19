@@ -80,7 +80,7 @@ bool x86ContractVM::execute(ContractOutput &output, ContractExecutionResult &res
         return false;
     }
     // todo: DELETE THIS AFTER DEBUG
-    stringstream ss;
+    std::stringstream ss;
     ss << std::hex << std::setfill('0');
 
     for (auto it = bytecode.begin(); it != bytecode.end(); it++) {
