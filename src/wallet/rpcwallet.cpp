@@ -657,8 +657,8 @@ UniValue createcontract(const JSONRPCRequest& request){
     // todo: delete the below, this is purely for debugging
     std::stringstream ss;
     ss << std::hex;
-    for (int i = 0; i < len; ++i)
-        ss << std::setw(2) << std::setfill('0') << (int)muhBytes[i];
+    for (int i = 0; i < bytecodeCompressed.length(); ++i)
+        ss << std::setw(2) << std::setfill('0') << (int)bytecodeCompressed[i];
     LogPrintf("RJs Debug mission yields this bytecode compressed variable: %s\n", ss.str());
     // end delete *********************************************************
 
