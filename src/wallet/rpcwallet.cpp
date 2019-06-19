@@ -661,7 +661,7 @@ UniValue createcontract(const JSONRPCRequest& request){
     for (auto it = bytecodeCompressed.begin(); it != bytecodeCompressed.end(); it++) {
         ss << "\\x" << std::setw(2) << static_cast<unsigned>(*it);
     }
-    LogPrintf("RJs Debug mission yields this bytecode compressed variable: ", ss.str());
+    LogPrintf("RJs Debug mission yields this bytecode compressed variable: %s\n", ss.str());
     // end delete *********************************************************
 
     CScript scriptPubKey = CScript() << CScriptNum(VersionVM::Getx86Default().toRaw()) << CScriptNum(nGasLimit) << CScriptNum(nGasPrice) << bytecodeCompressed <<OP_CREATE;

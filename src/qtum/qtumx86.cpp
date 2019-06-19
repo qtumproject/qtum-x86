@@ -87,7 +87,7 @@ bool x86ContractVM::execute(ContractOutput &output, ContractExecutionResult &res
         ss << "\\x" << std::setw(2) << static_cast<unsigned>(*it);
     }
 
-    LogPrintf("RJs Debug bytecode output in VM execution stage: ", ss.str());
+    LogPrintf("RJs Debug bytecode output in VM execution stage: %s\n", ss.str());
     // Debug ****************************************************
     BlockDataABI blockdata = getBlockData();
     TxDataABI txdata = getTxData();
