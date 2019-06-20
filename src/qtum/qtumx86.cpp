@@ -556,11 +556,11 @@ uint32_t QtumHypervisor::CallContract(uint32_t syscall, x86Lib::x86CPU& vm){
     if(!db.readByteCode(UniversalAddress(exec.self), bytecode)){
         return 1;
     }
-    QtumHypervisor hv(contractVM, db, exec);
-    hv.initSubVM(bytecode, vmdata);
-    hv.sccs = this->sccs;
+    QtumHypervisor *hv = new QtumHypervisor(contractVM, db, exec);
+    hv->initSubVM(bytecode, vmdata);
+    hv->sccs = this->sccs;
     db.checkpoint();
-    ContractExecutionResult result = hv.execute();
+    ContractExecutionResult result = hv->execute();
     this->effects.callResults.push_back(result);
 
     //propogate results from sub execution into this one
@@ -570,18 +570,19 @@ uint32_t QtumHypervisor::CallContract(uint32_t syscall, x86Lib::x86CPU& vm){
         //Go back to our own checkpoint, carrying the sub execution state with it
         db.condenseSingleCheckpoint();
     }else{
-        hv.sccs = std::stack<std::vector<uint8_t>>(); //clear stack upon error
+        hv->sccs = std::stack<std::vector<uint8_t>>(); //clear stack upon error
         db.revertCheckpoint(); //discard sub state
     }
 
-    this->sccs = hv.sccs;
+    this->sccs = hv->sccs;
     std::vector<uint8_t> ret;
     QtumCallResultABI cr;
-    cr.errorCode = hv.effects.exitCode;
+    cr.errorCode = hv->effects.exitCode;
     cr.refundedValue = result.refundSender;
     cr.usedGas = result.usedGas;
 
     cpu.WriteMemory(cpu.Reg32(EDX), std::min(cpu.Reg32(ESI), (uint32_t)sizeof(cr)), &cr, Syscall);
+    delete hv;
     return cr.errorCode;
 }
 
