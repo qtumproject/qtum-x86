@@ -94,54 +94,58 @@ bool x86ContractVM::execute(ContractOutput &output, ContractExecutionResult &res
     execdata.valueSent = output.value;
     execdata.self = output.address.toAbi();
 
-
-    QtumHypervisor qtumhv(*this, db, execdata);
+    //important: this allocates a significant amount of memory and might break
+    //if allocated on the stack
+    QtumHypervisor *qtumhv = new QtumHypervisor(*this, db, execdata);
     if(!output.OpCreate){
         //load call data into memory space if not create
-        pushArguments(qtumhv, output.data);
+        pushArguments(*qtumhv, output.data);
     }
-    qtumhv.initVM(bytecode, blockdata, txdata);
-    qtumhv.cpu.addGasUsed(50000); //base execution cost
+    qtumhv->initVM(bytecode, blockdata, txdata);
+    qtumhv->cpu.addGasUsed(50000); //base execution cost
     try{
-        qtumhv.cpu.Exec(INT32_MAX);
+        qtumhv->cpu.Exec(INT32_MAX);
     }
     catch(CPUFaultException err){
         std::string msg;
-        msg = tfm::format("CPU Panic! Message: %s, code: %x, opcode: %s, hex: %x, location: %x\n", err.desc, err.code, qtumhv.cpu.GetLastOpcodeName(), qtumhv.cpu.GetLastOpcode(), qtumhv.cpu.GetLocation());
+        msg = tfm::format("CPU Panic! Message: %s, code: %x, opcode: %s, hex: %x, location: %x\n", err.desc, err.code, qtumhv->cpu.GetLastOpcodeName(), qtumhv->cpu.GetLastOpcode(), qtumhv->cpu.GetLocation());
         result.modifiedData = db.getLatestModifiedState();
         result.status = ContractStatus::CodeError(msg);
         result.usedGas = output.gasLimit;
         result.refundSender = output.value;
-        result.events = qtumhv.getEffects().events;
-        result.callResults = qtumhv.getEffects().callResults;
+        result.events = qtumhv->getEffects().events;
+        result.callResults = qtumhv->getEffects().callResults;
+        delete qtumhv;
         return false;
     }
     catch(MemoryException *err){
         std::string msg;
-        msg = tfm::format("Memory error! address: %x, opcode: %s, hex: %x, location: %x\n", err->address, qtumhv.cpu.GetLastOpcodeName(), qtumhv.cpu.GetLastOpcode(), qtumhv.cpu.GetLocation());
+        msg = tfm::format("Memory error! address: %x, opcode: %s, hex: %x, location: %x\n", err->address, qtumhv->cpu.GetLastOpcodeName(), qtumhv->cpu.GetLastOpcode(), qtumhv->cpu.GetLocation());
         result.modifiedData = db.getLatestModifiedState();
         result.status = ContractStatus::CodeError(msg);
         result.usedGas = output.gasLimit;
         result.refundSender = output.value;
-        result.events = qtumhv.getEffects().events;
-        result.callResults = qtumhv.getEffects().callResults;
+        result.events = qtumhv->getEffects().events;
+        result.callResults = qtumhv->getEffects().callResults;
+        delete qtumhv;
         return false;
     }
-    HypervisorEffect effects = qtumhv.getEffects();
+    HypervisorEffect effects = qtumhv->getEffects();
     result.address = output.address;
     result.modifiedData = db.getLatestModifiedState();
-    result.usedGas = (uint64_t)qtumhv.cpu.getGasUsed();
+    result.usedGas = (uint64_t)qtumhv->cpu.getGasUsed();
     result.refundSender = 0;
-    result.events = qtumhv.getEffects().events;
-    result.callResults = qtumhv.getEffects().callResults;
+    result.events = qtumhv->getEffects().events;
+    result.callResults = qtumhv->getEffects().callResults;
 
-    if(qtumhv.cpu.gasExceeded()){
-        LogPrintf("Execution ended due to OutOfGas. Gas used: %i\n", qtumhv.cpu.getGasUsed());
+    if(qtumhv->cpu.gasExceeded()){
+        LogPrintf("Execution ended due to OutOfGas. Gas used: %i\n", qtumhv->cpu.getGasUsed());
         result.status = ContractStatus::OutOfGas();
         result.refundSender = output.value;
         result.commitState = false;
         //potentially possible for usedGas to be greater than gasLimit, so set to gasLimit to prevent insanity
         result.usedGas = output.gasLimit;
+        delete qtumhv;
         return false;
     }
     if(effects.exitCode == 0) {
@@ -155,6 +159,7 @@ bool x86ContractVM::execute(ContractOutput &output, ContractExecutionResult &res
         result.status = ContractStatus::Success();
         result.commitState = true;
         result.modifiedData = db.getLatestModifiedState();
+        delete qtumhv;
         return true;
     }else{
         LogPrintf("Execution ended with error: %i\n", effects.exitCode);
@@ -162,6 +167,7 @@ bool x86ContractVM::execute(ContractOutput &output, ContractExecutionResult &res
         result.refundSender = output.value; //refund all
         result.status = ContractStatus::ReturnedError(std::to_string(effects.exitCode));
         result.commitState = false;
+        delete qtumhv;
         return false;
     }
     return false;
@@ -550,11 +556,11 @@ uint32_t QtumHypervisor::CallContract(uint32_t syscall, x86Lib::x86CPU& vm){
     if(!db.readByteCode(UniversalAddress(exec.self), bytecode)){
         return 1;
     }
-    QtumHypervisor hv(contractVM, db, exec);
-    hv.initSubVM(bytecode, vmdata);
-    hv.sccs = this->sccs;
+    QtumHypervisor *hv = new QtumHypervisor(contractVM, db, exec);
+    hv->initSubVM(bytecode, vmdata);
+    hv->sccs = this->sccs;
     db.checkpoint();
-    ContractExecutionResult result = hv.execute();
+    ContractExecutionResult result = hv->execute();
     this->effects.callResults.push_back(result);
 
     //propogate results from sub execution into this one
@@ -564,18 +570,19 @@ uint32_t QtumHypervisor::CallContract(uint32_t syscall, x86Lib::x86CPU& vm){
         //Go back to our own checkpoint, carrying the sub execution state with it
         db.condenseSingleCheckpoint();
     }else{
-        hv.sccs = std::stack<std::vector<uint8_t>>(); //clear stack upon error
+        hv->sccs = std::stack<std::vector<uint8_t>>(); //clear stack upon error
         db.revertCheckpoint(); //discard sub state
     }
 
-    this->sccs = hv.sccs;
+    this->sccs = hv->sccs;
     std::vector<uint8_t> ret;
     QtumCallResultABI cr;
-    cr.errorCode = hv.effects.exitCode;
+    cr.errorCode = hv->effects.exitCode;
     cr.refundedValue = result.refundSender;
     cr.usedGas = result.usedGas;
 
     cpu.WriteMemory(cpu.Reg32(EDX), std::min(cpu.Reg32(ESI), (uint32_t)sizeof(cr)), &cr, Syscall);
+    delete hv;
     return cr.errorCode;
 }
 
