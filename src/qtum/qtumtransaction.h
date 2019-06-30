@@ -443,7 +443,7 @@ class ContractStatus{
         return ContractStatus(1, "Out of gas", extra);
     }
     static ContractStatus CodeError(std::string extra=""){
-        return ContractStatus(2, "Unhandled exception triggered in execution ", extra);
+        return ContractStatus(2, "Unhandled exception triggered in execution", extra);
     }
     static ContractStatus DoesntExist(std::string extra=""){
         return ContractStatus(3, "Contract does not exist", extra);
@@ -454,6 +454,10 @@ class ContractStatus{
     static ContractStatus ErrorWithCommit(std::string extra=""){
         return ContractStatus(5, "Contract chose to commit state, but returned an error code", extra);
     }
+    static ContractStatus InternalError(std::string extra=""){
+        return ContractStatus(6, "Internal error with contract execution", extra);
+    }
+
 };
 
 struct ContractExecutionResult{
