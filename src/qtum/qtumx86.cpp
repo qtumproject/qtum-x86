@@ -102,14 +102,14 @@ bool x86ContractVM::execute(ContractOutput &output, ContractExecutionResult &res
         pushArguments(*qtumhv, output.data);
     }
 
-    if(!qtumhv.initVM(bytecode, blockdata, txdata)){
+    if(!qtumhv->initVM(bytecode, blockdata, txdata)){
         LogPrintf("Error initializing x86 VM environment\n");
         result.modifiedData = db.getLatestModifiedState();
         result.status = ContractStatus::InternalError("Error initializing x86 VM environment for this contract");
         result.usedGas = output.gasLimit;
         result.refundSender = output.value;
-        result.events = qtumhv.getEffects().events;
-        result.callResults = qtumhv.getEffects().callResults;
+        result.events = qtumhv->getEffects().events;
+        result.callResults = qtumhv->getEffects().callResults;
         return false;
     }
     qtumhv->cpu.addGasUsed(50000); //base execution cost
