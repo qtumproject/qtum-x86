@@ -125,6 +125,9 @@ class QtumHypervisor : public x86Lib::InterruptHypervisor{
         return cpu.addGasUsed(v);
     }
     ContractExecutionResult execute();
+    virtual ~QtumHypervisor(){
+        
+    }
 private:
     x86Lib::x86CPU cpu;
     bool initSubVM(const std::vector<uint8_t> bytecode, x86VMData& data);
