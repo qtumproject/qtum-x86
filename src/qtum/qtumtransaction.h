@@ -209,7 +209,7 @@ struct UniversalAddress{
             case AddressVersion::SCRIPTHASH:
             return 20;
             default:
-            return 32;
+            return ADDRESS_DATA_SIZE; //TODO this will change later
         }
     }
 
