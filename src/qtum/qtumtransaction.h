@@ -3,6 +3,11 @@
 
 #include <libethcore/Transaction.h>
 
+static const uint8_t ROOT_VM_NULL = 0;
+static const uint8_t ROOT_VM_EVM = 1;
+static const uint8_t ROOT_VM_X86 = 2;
+
+
 struct VersionVM{
     //this should be portable, see https://stackoverflow.com/questions/31726191/is-there-a-portable-alternative-to-c-bitfields
 # if __BYTE_ORDER == __LITTLE_ENDIAN

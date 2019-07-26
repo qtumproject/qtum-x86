@@ -235,6 +235,10 @@ BITCOIN_CORE_H = \
   qtum/qtumstate.h \
   qtum/qtumtransaction.h \
   qtum/qtumDGP.h \
+  qtum/deltadb.h \
+  qtum/aalv2.h \
+  qtum/neutron.h \
+  qtum/neutron-c.h \
   qtum/storageresults.h
 
 
@@ -441,7 +445,12 @@ libbitcoin_consensus_a_SOURCES = \
   uint256.h \
   util/strencodings.cpp \
   util/strencodings.h \
-  version.h
+  version.h \
+  qtum/aalv2.h \
+  qtum/deltadb.h \
+  qtum/neutron.h \
+  qtum/neutron-c.h \
+  neutron-c.h
 
 # common: shared between bitcoind, and bitcoin-qt and non-server tools
 libbitcoin_common_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) -DQTUM_BUILD
@@ -642,6 +651,9 @@ libbitcoin_common_a_SOURCES = \
   cpp-ethereum/utils/json_spirit/json_spirit_value.h \
   cpp-ethereum/utils/json_spirit/json_spirit_writer.h \
   cpp-ethereum/utils/json_spirit/json_spirit_writer_template.h \
+  qtum/aalv2.cpp \
+  qtum/deltadb.cpp \
+  qtum/neutron.cpp \
   $(BITCOIN_CORE_H)
 
 #only added json_spirit so that `make dist` works properly
