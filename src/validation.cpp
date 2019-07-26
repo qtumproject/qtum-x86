@@ -54,6 +54,9 @@
 
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/thread.hpp>
+#include <qtum/neutron.h>
+#include <qtum/aalv2.h>
+#include <qtum/deltadb.h>
 
 #if defined(NDEBUG)
 # error "Qtum cannot be compiled without assertions."
@@ -798,7 +801,7 @@ static bool AcceptToMemoryPoolWorker(const CChainParams& chainparams, CTxMemPool
                 VersionVM v = qtumTransaction.getVersion();
                 if(v.format!=0)
                     return state.DoS(100, error("AcceptToMempool(): Contract execution uses unknown version format"), REJECT_INVALID, "bad-tx-version-format");
-                if(v.rootVM != 1)
+                if(v.rootVM != ROOT_VM_EVM && v.rootVM != ROOT_VM_X86)
                     return state.DoS(100, error("AcceptToMempool(): Contract execution uses unknown root VM"), REJECT_INVALID, "bad-tx-version-rootvm");
                 if(v.vmVersion != 0)
                     return state.DoS(100, error("AcceptToMempool(): Contract execution uses unknown VM version"), REJECT_INVALID, "bad-tx-version-vmversion");
@@ -2964,13 +2967,13 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
 
 
             dev::u256 gasAllTxs = dev::u256(0);
-            ByteCodeExec exec(block, resultConvertQtumTX.first, blockGasLimit, pindex->pprev);
             //validate VM version and other ETH params before execution
             //Reject anything unknown (could be changed later by DGP)
             //TODO evaluate if this should be relaxed for soft-fork purposes
             bool nonZeroVersion=false;
             dev::u256 sumGas = dev::u256(0);
             CAmount nTxFee = view.GetValueIn(tx)-tx.GetValueOut();
+            bool useNeutron = false;
             for(QtumTransaction& qtx : resultConvertQtumTX.first){
                 sumGas += qtx.gas() * qtx.gasPrice();
 
@@ -2993,8 +2996,11 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
                         return state.DoS(100, error("ConnectBlock(): Contract tx has mixed version 0 and non-0 VM executions"), REJECT_INVALID, "bad-tx-mixed-zero-versions");
                     }
                 }
-                if(!(v.rootVM == 0 || v.rootVM == 1))
+                if(!(v.rootVM == ROOT_VM_NULL || v.rootVM == ROOT_VM_EVM || v.rootVM == ROOT_VM_X86))
                     return state.DoS(100, error("ConnectBlock(): Contract execution uses unknown root VM"), REJECT_INVALID, "bad-tx-version-rootvm");
+                if(v.rootVM == ROOT_VM_X86){
+                    useNeutron = true;
+                }
                 if(v.vmVersion != 0)
                     return state.DoS(100, error("ConnectBlock(): Contract execution uses unknown VM version"), REJECT_INVALID, "bad-tx-version-vmversion");
                 if(v.flagOptions != 0)
@@ -3022,53 +3028,66 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
                     return state.DoS(100, error("ConnectBlock(): Version 0 contract executions are not allowed unless created by the AAL "), REJECT_INVALID, "bad-tx-improper-version-0");
                 }
             }
-
-            if(!exec.performByteCode()){
-                return state.DoS(100, error("ConnectBlock(): Unknown error during contract execution"), REJECT_INVALID, "bad-tx-unknown-error");
-            }
-
-            std::vector<ResultExecute> resultExec(exec.getResult());
-            ByteCodeExecResult bcer;
-            if(!exec.processingResults(bcer)){
-                return state.DoS(100, error("ConnectBlock(): Error processing VM execution results"), REJECT_INVALID, "bad-vm-exec-processing");
-            }
-
-            countCumulativeGasUsed += bcer.usedGas;
-            std::vector<TransactionReceiptInfo> tri;
-            if (fLogEvents && !fJustCheck)
-            {
-                for(size_t k = 0; k < resultConvertQtumTX.first.size(); k ++){
-                    for(auto& log : resultExec[k].txRec.log()) {
-                        if(!heightIndexes.count(log.address)){
-                            heightIndexes[log.address].first = CHeightTxIndexKey(pindex->nHeight, log.address);
-                        }
-                        heightIndexes[log.address].second.push_back(tx.GetHash());
+            if(useNeutron){
+                for(int i = 0; i < tx.vout.size(); i++){
+                    ContractOutputParser p(tx, i);
+                    ContractOutput output;
+                    if(!p.parseToOutput(output)){
+                        continue;
                     }
-                    tri.push_back(TransactionReceiptInfo{block.GetHash(), uint32_t(pindex->nHeight), tx.GetHash(), uint32_t(i), resultConvertQtumTX.first[k].from(), resultConvertQtumTX.first[k].to(),
-                                countCumulativeGasUsed, uint64_t(resultExec[k].execRes.gasUsed), resultExec[k].execRes.newAddress, resultExec[k].txRec.log(), resultExec[k].execRes.excepted});
+                    
+
+                }
+            }else{
+                ByteCodeExec exec(block, resultConvertQtumTX.first, blockGasLimit, pindex->pprev);
+
+                if(!exec.performByteCode()){
+                    return state.DoS(100, error("ConnectBlock(): Unknown error during contract execution"), REJECT_INVALID, "bad-tx-unknown-error");
                 }
 
-                pstorageresult->addResult(uintToh256(tx.GetHash()), tri);
-            }
+                std::vector<ResultExecute> resultExec(exec.getResult());
+                ByteCodeExecResult bcer;
+                if(!exec.processingResults(bcer)){
+                    return state.DoS(100, error("ConnectBlock(): Error processing VM execution results"), REJECT_INVALID, "bad-vm-exec-processing");
+                }
 
-            blockGasUsed += bcer.usedGas;
-            if(blockGasUsed > blockGasLimit){
-                return state.DoS(1000, error("ConnectBlock(): Block exceeds gas limit"), REJECT_INVALID, "bad-blk-gaslimit");
-            }
-            for(CTxOut refundVout : bcer.refundOutputs){
-                gasRefunds += refundVout.nValue;
-            }
-            checkVouts.insert(checkVouts.end(), bcer.refundOutputs.begin(), bcer.refundOutputs.end());
-            for(CTransaction& t : bcer.valueTransfers){
-                checkBlock.vtx.push_back(MakeTransactionRef(std::move(t)));
-            }
-            if(fRecordLogOpcodes && !fJustCheck){
-                writeVMlog(resultExec, tx, block);
-            }
+                countCumulativeGasUsed += bcer.usedGas;
+                std::vector<TransactionReceiptInfo> tri;
+                if (fLogEvents && !fJustCheck)
+                {
+                    for(size_t k = 0; k < resultConvertQtumTX.first.size(); k ++){
+                        for(auto& log : resultExec[k].txRec.log()) {
+                            if(!heightIndexes.count(log.address)){
+                                heightIndexes[log.address].first = CHeightTxIndexKey(pindex->nHeight, log.address);
+                            }
+                            heightIndexes[log.address].second.push_back(tx.GetHash());
+                        }
+                        tri.push_back(TransactionReceiptInfo{block.GetHash(), uint32_t(pindex->nHeight), tx.GetHash(), uint32_t(i), resultConvertQtumTX.first[k].from(), resultConvertQtumTX.first[k].to(),
+                                    countCumulativeGasUsed, uint64_t(resultExec[k].execRes.gasUsed), resultExec[k].execRes.newAddress, resultExec[k].txRec.log(), resultExec[k].execRes.excepted});
+                    }
 
-            for(ResultExecute& re: resultExec){
-                if(re.execRes.newAddress != dev::Address() && !fJustCheck)
-                    dev::g_logPost(std::string("Address : " + re.execRes.newAddress.hex()), NULL);
+                    pstorageresult->addResult(uintToh256(tx.GetHash()), tri);
+                }
+
+                blockGasUsed += bcer.usedGas;
+                if(blockGasUsed > blockGasLimit){
+                    return state.DoS(1000, error("ConnectBlock(): Block exceeds gas limit"), REJECT_INVALID, "bad-blk-gaslimit");
+                }
+                for(CTxOut refundVout : bcer.refundOutputs){
+                    gasRefunds += refundVout.nValue;
+                }
+                checkVouts.insert(checkVouts.end(), bcer.refundOutputs.begin(), bcer.refundOutputs.end());
+                for(CTransaction& t : bcer.valueTransfers){
+                    checkBlock.vtx.push_back(MakeTransactionRef(std::move(t)));
+                }
+                if(fRecordLogOpcodes && !fJustCheck){
+                    writeVMlog(resultExec, tx, block);
+                }
+
+                for(ResultExecute& re: resultExec){
+                    if(re.execRes.newAddress != dev::Address() && !fJustCheck)
+                        dev::g_logPost(std::string("Address : " + re.execRes.newAddress.hex()), NULL);
+                }
             }
         }
 /////////////////////////////////////////////////////////////////////////////////////////

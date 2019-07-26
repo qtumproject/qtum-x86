@@ -49,6 +49,7 @@
 #include <util/convert.h>
 #include <logging.h>
 #include <validationinterface.h>
+#include <qtum/deltadb.h>
 #ifdef ENABLE_WALLET
 #include <wallet/wallet.h>
 #endif
@@ -282,6 +283,8 @@ void Shutdown(InitInterfaces& interfaces)
         pstorageresult.reset();
         globalState.reset();
         globalSealEngine.reset();
+        delete pdeltaDB;
+        delete peventdb;
     }
     for (const auto& client : interfaces.chain_clients) {
         client->stop();
@@ -1529,6 +1532,8 @@ bool AppInitMain(InitInterfaces& interfaces)
                 globalSealEngine.reset();
                 pblocktree.reset(new CBlockTreeDB(nBlockTreeDBCache, false, fReset));
 
+                pdeltaDB = new DeltaDB(nBlockTreeDBCache, false, fReset);
+                peventdb = new EventDB(nBlockTreeDBCache, false, fReset);
                 if (fReset) {
                     pblocktree->WriteReindexing(true);
                     //If we're reindexing in prune mode, wipe away unusable block files and all undo data files

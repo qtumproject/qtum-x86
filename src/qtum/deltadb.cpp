@@ -26,6 +26,10 @@ static const char DELTADB_STATE_KEY = '_';
 static const char DELTADB_STATE_AAL = 'a';
 
 
+//TODO: don't use a global for this so we can execute things in parallel
+DeltaDB* pdeltaDB = nullptr;
+EventDB *peventdb = nullptr;
+
 bool DeltaDBWrapper::Write(valtype K, valtype V){
     std::string k(K.begin(), K.end());
     current->deltas[k] = V;

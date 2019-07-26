@@ -1,3 +1,5 @@
+#ifndef DELTADB_H
+#define DELTADB_H
 
 #include <unordered_map>
 
@@ -70,17 +72,6 @@ struct ContractExecutionResult{
         result.pushKV("calls", calls);
         return result;
     }
-};
-
-class ContractExecutor{
-public:
-    ContractExecutor(const CBlock& _block, ContractOutput _output, uint64_t _blockGasLimit);
-    bool execute(ContractExecutionResult &result, bool commit);
-private:
-    ContractEnvironment buildEnv();
-    const CBlock& block;
-    ContractOutput output;
-    const uint64_t blockGasLimit;
 };
 
 
@@ -212,6 +203,10 @@ private:
     bool Read(valtype K, uint64_t& V);
 };
 
+//TODO: don't use a global for this so we can execute things in parallel
+extern DeltaDB* pdeltaDB;
+extern EventDB *peventdb;
 
 
 
+#endif

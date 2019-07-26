@@ -238,7 +238,7 @@ public:
 
     ContractOutputParser(const CTransaction &tx, uint32_t vout, const CCoinsViewCache* v = NULL, const std::vector<CTransactionRef>* blockTxs = NULL)
             : tx(tx), nvout(vout), view(v), blockTransactions(blockTxs) {}
-    bool parseOutput(ContractOutput& output);
+    bool parseToOutput(ContractOutput& output);
     UniversalAddress getSenderAddress();
 
 private:
@@ -263,7 +263,18 @@ struct ContractEnvironment{
     //todo for x86: tx info
 };
 
+class ContractExecutionResult;
 
+class ContractExecutor{
+public:
+    ContractExecutor(const CBlock& _block, ContractOutput _output, uint64_t _blockGasLimit);
+    bool execute(ContractExecutionResult &result, bool commit);
+private:
+    ContractEnvironment buildEnv();
+    const CBlock& block;
+    ContractOutput output;
+    const uint64_t blockGasLimit;
+};
 
 
 #endif

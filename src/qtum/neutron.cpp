@@ -8,6 +8,7 @@
 #include <pubkey.h>
 #include "qtumtransaction.h"
 #include <qtum/neutron.h>
+#include <qtum/deltadb.h>
 #include <vector>
 #include <streams.h>
 #include <serialize.h>
@@ -18,7 +19,7 @@
 #include <univalue.h>
 
 
-bool ContractOutputParser::parseOutput(ContractOutput& output){
+bool ContractOutputParser::parseToOutput(ContractOutput& output){
     output.sender = getSenderAddress();
     output.value = tx.vout[nvout].nValue;
     try{
@@ -188,5 +189,40 @@ UniversalAddress UniversalAddress::FromScript(const CScript& script){
     return UniversalAddress();
 }
 
+
+ContractExecutor::ContractExecutor(const CBlock &_block, ContractOutput _output, uint64_t _blockGasLimit)
+: block(_block), output(_output), blockGasLimit(_blockGasLimit)
+{
+
+}
+
+bool ContractExecutor::execute(ContractExecutionResult &result, bool commit)
+{
+    
+    DeltaDBWrapper wrapper(pdeltaDB);
+    ContractEnvironment env=buildEnv();
+    if(result.blockHash == uint256()){
+        result.blockHash = block.GetHash();
+    }
+    /*
+    if(output.version.rootVM == ROOT_VM_EVM){
+        EVMContractVM evm(wrapper, env, blockGasLimit);
+        evm.execute(output, result, commit);
+    }else if(output.version.rootVM == ROOT_VM_X86){
+        wrapper.setInitialCoins(output.address, output.vout, output.value);
+        x86ContractVM x86(wrapper, env, blockGasLimit);
+        x86.execute(output, result, commit);
+        result.transferTx = CMutableTransaction(wrapper.createCondensingTx());
+    }else{
+        return false;
+    }
+    */
+    if(commit && result.commitState){
+        wrapper.commit();
+    }
+    
+    //no need to revert if not committing
+    return true;
+}
 
 
